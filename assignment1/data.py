@@ -4,8 +4,9 @@ from tqdm import tqdm
 import tensorflow as tf
 
 RESIZE_IMAGE_DIMESIONS = (64, 64)
-BATCH_SIZE = 2
+BATCH_SIZE = 128
 SHUFFLE_BUFFER_SIZE = 1024
+PREFETCH_BUFFER_SIZE = 4
 
 @tf.function
 def scale_values(image, label):
@@ -23,46 +24,62 @@ def to_grayscale(image, label):
     return image, label
 
 def create_data(path : str, cache : str = None):
-    if cache and os.path.exists(cache):
-        t_ds = tf.data.Dataset.load(os.path.join(cache, 'train.tfds'))
-        v_ds = tf.data.Dataset.load(os.path.join(cache, 'validation.tfds'))
-        return t_ds, v_ds
+    if not cache or not os.path.exists(cache):
 
-    if not os.path.exists(path):
-        raise Exception(f'Cannot find path to images: "{path}"')
-    print(f'Found folder with images: "{path}"')
+        if not os.path.exists(path):
+            raise Exception(f'Cannot find path to images: "{path}"')
+        print(f'Found folder with images: "{path}"')
 
-    dataset, validation_data = tf.keras.utils.image_dataset_from_directory(
-    # dataset = tf.keras.utils.image_dataset_from_directory(
-        path,
-        label_mode='int', 
-        shuffle=False,
-        batch_size=None, 
-        image_size=RESIZE_IMAGE_DIMESIONS,
-        validation_split=0.2,
-        subset='both'
+        dataset, validation_data = tf.keras.utils.image_dataset_from_directory(
+            path,
+            label_mode='int', 
+            shuffle=True,
+            seed=69420,
+            batch_size=None, 
+            image_size=RESIZE_IMAGE_DIMESIONS,
+            validation_split=0.2,
+            subset='both'
+            )
+
+        validation_data = (
+            validation_data
+            .map(scale_values)
+            .map(to_grayscale)
         )
 
-    
-    validation_data = (
-        # dataset.take(20)
-        validation_data
-        .map(scale_values)
-        .map(to_grayscale)
-        .shuffle(SHUFFLE_BUFFER_SIZE)
+        dataset = (
+            dataset
+            .map(scale_values)
+            .map(to_grayscale)
+        )
+
+        if cache and not os.path.exists(cache):
+            os.makedirs(cache)
+            print(f'Writing to cache file "{cache}"...')
+            dataset.save(os.path.join(cache, 'train.tfds'))
+            validation_data.save(os.path.join(cache, 'validation.tfds'))
+            print('Finished.')
+
+        t_ds = dataset
+        v_ds = validation_data
+
+    else:
+        print(f'Found cache directory "{cache}", loading...')
+        t_ds = tf.data.Dataset.load(os.path.join(cache, 'train.tfds'))
+        v_ds = tf.data.Dataset.load(os.path.join(cache, 'validation.tfds'))
+        print(f'Loaded cached data.')
+
+    t_ds = (
+        t_ds
         .batch(BATCH_SIZE)
+        .cache()
+        .prefetch(PREFETCH_BUFFER_SIZE)
     )
 
-    dataset = (
-        dataset
-        .map(scale_values)
-        .map(to_grayscale)
-        .shuffle(SHUFFLE_BUFFER_SIZE)
+    v_ds = (
+        v_ds
         .batch(BATCH_SIZE)
+        .cache()
+        .prefetch(PREFETCH_BUFFER_SIZE)
     )
-
-    if cache and not os.path.exists(cache):
-        os.makedirs(cache)
-        dataset.save(os.path.join(cache, 'train.tfds'))
-        validation_data.save(os.path.join(cache, 'validation.tfds'))
-    return dataset, validation_data
+    return t_ds, v_ds

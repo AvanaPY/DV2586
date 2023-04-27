@@ -22,29 +22,22 @@ class ResidualConvolutional2D(Layer):
         return y
 
 class MyModel(Model):
-    def __init__(self, model_filters : int, residual_filters : int, kernel_size : Tuple[int, int], dropout : float, ff_dim : int, NUM_CLASSES : int = 10):
+    def __init__(self, model_filters : int, residual_layers : int, residual_filters : int, kernel_size : Tuple[int, int], dropout : float, ff_dim : int, NUM_CLASSES : int = 10):
         super().__init__()
 
-        self._layers = [
-            Conv2D(filters=model_filters, kernel_size=(7, 7), strides=(1, 1), padding='valid', activation='relu'),
-            BatchNormalization(),
-            Dropout(dropout),
-            Conv2D(filters=model_filters, kernel_size=(7, 7), strides=(1, 1), padding='valid', activation='relu'),  
-            BatchNormalization(),
-            Dropout(dropout),          
-            Conv2D(filters=residual_filters, kernel_size=(7, 7), strides=(1, 1), padding='valid', activation='relu', name='ResidualPrepare'),  
-            ResidualConvolutional2D(filters=residual_filters, kernel_size=kernel_size, dropout=dropout, activation='relu'),
-            ResidualConvolutional2D(filters=residual_filters, kernel_size=kernel_size, dropout=dropout, activation='relu'),
-            ResidualConvolutional2D(filters=residual_filters, kernel_size=kernel_size, dropout=dropout, activation='relu'),
-            ResidualConvolutional2D(filters=residual_filters, kernel_size=kernel_size, dropout=dropout, activation='relu'),
-            Conv2D(filters=model_filters, kernel_size=(5, 5), strides=(2, 2), padding='valid', activation='relu'),
-            Conv2D(filters=model_filters, kernel_size=(5, 5), strides=(2, 2), padding='valid', activation='relu'),
-            Flatten(),
-            Dense(ff_dim, activation='relu'),
-            Dropout(dropout),
-            Dense(NUM_CLASSES, activation='softmax')
-        ]
+        self._layers = []
+        self._layers.append(Conv2D(filters=residual_filters, kernel_size=(5, 5), strides=(2, 2), padding='valid', activation='relu', name='ResidualPrepare'))
 
+        for _ in range(residual_layers):
+            self._layers.append(ResidualConvolutional2D(filters=residual_filters, kernel_size=kernel_size, dropout=dropout, activation='relu'))
+
+        self._layers.append(Conv2D(filters=model_filters, kernel_size=(5, 5), strides=(1, 1), padding='valid', activation='relu'))
+        self._layers.append(Dropout(dropout))
+        self._layers.append(Flatten())
+        # self._layers.append(Dense(ff_dim, activation='relu'))
+        # self._layers.append(Dropout(dropout))
+        self._layers.append(Dense(NUM_CLASSES, activation='softmax'))
+        
 
     def call(self, inputs):
         x = inputs
