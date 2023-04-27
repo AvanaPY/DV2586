@@ -7,6 +7,8 @@ import numpy as np
 import tensorflow as tf
 import time
 
+from custom_metrics import recall_m, precision_m, f1_m
+
 PATH_TO_IMAGES = '/mnt/c/Users/emilk/Downloads/250000_Final/250000_Final'
 PATH_TO_IMAGES = 'test_data'
 CACHE_DIRECTORY = None
@@ -20,14 +22,20 @@ data, val_data = create_data(PATH_TO_IMAGES, cache=CACHE_DIRECTORY)
 model = MyModel(model_filters=8, residual_layers=4, residual_filters=16, kernel_size=(5, 5), dropout=0.2, ff_dim=64, NUM_CLASSES=10)
 model.compile(
     tf.keras.optimizers.Adam(learning_rate=1e-4), 
-    loss=tf.keras.losses.SparseCategoricalCrossentropy(),
-    metrics=['accuracy']
+    loss=tf.keras.losses.CategoricalCrossentropy(),
+    metrics=[
+        'accuracy',
+        'TruePositives',
+        'TrueNegatives',
+        'FalsePositives',
+        'FalseNegatives'
+    ]
 )
 model.build((None, 64, 64, 1))
 model.summary()
 
-model.fit(data, validation_data=val_data, epochs=20)
-model.save(f'models/model_{time}')
+# model.fit(data, validation_data=val_data, epochs=1)
+# model.save(f'models/model_{MODEL_NAME}')
 
 fig = plt.figure(figsize=(12, 12))
 fig.subplots_adjust(
@@ -53,7 +61,8 @@ for images, labels in data.take(1):
         ax.imshow(image, cmap='gray', vmin=0, vmax=1)
 
         predicted = tf.argmax(img_preds, axis=-1)
-        titl = f'{label.numpy()} | {predicted.numpy()} : {img_preds[predicted.numpy()]:.2f}'
+        labl = tf.argmax(label).numpy()
+        titl = f'{labl} | {predicted.numpy()} : {img_preds[predicted.numpy()]:.2f}'
         ax.set_title(titl)
 
 
@@ -65,7 +74,8 @@ for images, labels in val_data.take(1):
         ax.imshow(image, cmap='gray', vmin=0, vmax=1)
 
         predicted = tf.argmax(img_preds, axis=-1)
-        titl = f'{label.numpy()} | {predicted.numpy()} : {img_preds[predicted.numpy()]:.2f}'
+        labl = tf.argmax(label).numpy()
+        titl = f'{labl} | {predicted.numpy()} : {img_preds[predicted.numpy()]:.2f}'
         ax.set_title(titl)
 
 plt.show()

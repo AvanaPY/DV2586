@@ -23,6 +23,10 @@ def to_grayscale(image, label):
     image = tf.image.rgb_to_grayscale(image)
     return image, label
 
+@tf.function
+def one_hot_y(image, label):
+    return image, tf.one_hot(label, 10)
+
 def create_data(path : str, cache : str = None):
     if not cache or not os.path.exists(cache):
 
@@ -71,6 +75,7 @@ def create_data(path : str, cache : str = None):
 
     t_ds = (
         t_ds
+        .map(one_hot_y)
         .batch(BATCH_SIZE)
         .cache()
         .prefetch(PREFETCH_BUFFER_SIZE)
@@ -78,6 +83,7 @@ def create_data(path : str, cache : str = None):
 
     v_ds = (
         v_ds
+        .map(one_hot_y)
         .batch(BATCH_SIZE)
         .cache()
         .prefetch(PREFETCH_BUFFER_SIZE)
