@@ -3,7 +3,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from tqdm import tqdm
 import tensorflow as tf
 
-RESIZE_IMAGE_DIMESIONS = (64, 64)
 BATCH_SIZE = 128
 SHUFFLE_BUFFER_SIZE = 1024
 PREFETCH_BUFFER_SIZE = 4
@@ -15,7 +14,7 @@ def scale_values(image, label):
 
 @tf.function
 def resize_image(image, label):
-    image = tf.image.resize(image, RESIZE_IMAGE_DIMESIONS)
+    image = tf.image.resize(image, get_image_resize_dimensions())
     return image, label
 
 @tf.function
@@ -26,6 +25,17 @@ def to_grayscale(image, label):
 @tf.function
 def one_hot_y(image, label):
     return image, tf.one_hot(label, 10)
+
+@tf.function
+def process_image(image, label):
+    image = image / 255.0
+    image = tf.image.resize(image, get_image_resize_dimensions())
+    image = tf.image.rgb_to_grayscale(image)
+    label = tf.one_hot(label, 10)
+    return image, label
+
+def get_image_resize_dimensions():
+    return (48, 48)
 
 def create_data(path : str, cache : str = None):
     if not cache or not os.path.exists(cache):
@@ -40,26 +50,24 @@ def create_data(path : str, cache : str = None):
             shuffle=True,
             seed=69420,
             batch_size=None, 
-            image_size=RESIZE_IMAGE_DIMESIONS,
+            image_size=get_image_resize_dimensions(),
             validation_split=0.2,
             subset='both'
             )
 
         validation_data = (
             validation_data
-            .map(scale_values)
-            .map(to_grayscale)
+            .map(process_image)
         )
 
         dataset = (
             dataset
-            .map(scale_values)
-            .map(to_grayscale)
+            .map(process_image)
         )
 
         if cache and not os.path.exists(cache):
             os.makedirs(cache)
-            print(f'Writing to cache file "{cache}"...')
+            print(f'Writing to cache directory "{cache}"...')
             dataset.save(os.path.join(cache, 'train.tfds'))
             validation_data.save(os.path.join(cache, 'validation.tfds'))
             print('Finished.')
@@ -75,7 +83,6 @@ def create_data(path : str, cache : str = None):
 
     t_ds = (
         t_ds
-        .map(one_hot_y)
         .batch(BATCH_SIZE)
         .cache()
         .prefetch(PREFETCH_BUFFER_SIZE)
@@ -83,7 +90,6 @@ def create_data(path : str, cache : str = None):
 
     v_ds = (
         v_ds
-        .map(one_hot_y)
         .batch(BATCH_SIZE)
         .cache()
         .prefetch(PREFETCH_BUFFER_SIZE)

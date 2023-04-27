@@ -1,5 +1,6 @@
-cache_data*
+cache*
 test_data
+250000_Final
 models
 .vscode
 *.pyc
