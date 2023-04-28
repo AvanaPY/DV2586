@@ -1,11 +1,13 @@
+from typing import *
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from tqdm import tqdm
 import tensorflow as tf
+from tensorflow.keras.applications.resnet50 import preprocess_input
 
 BATCH_SIZE = 128
 SHUFFLE_BUFFER_SIZE = 1024
-PREFETCH_BUFFER_SIZE = 4
+PREFETCH_BUFFER_SIZE = 2
 
 @tf.function
 def scale_values(image, label):
@@ -34,10 +36,17 @@ def process_image(image, label):
     label = tf.one_hot(label, 10)
     return image, label
 
+@tf.function
+def transfer_process_image(image, label):
+    image = tf.image.resize(image, (48, 48))
+    image = preprocess_input(image)
+    label = tf.one_hot(label, 10)
+    return image, label
+    
 def get_image_resize_dimensions():
     return (48, 48)
 
-def create_data(path : str, cache : str = None):
+def get_or_create_data(path : str, cache : str = None, batch_size : Optional[int] = None, for_model : Optional[str] = None):
     if not cache or not os.path.exists(cache):
 
         if not os.path.exists(path):
@@ -55,14 +64,21 @@ def create_data(path : str, cache : str = None):
             subset='both'
             )
 
+        image_processor = {
+            None : process_image,
+            'resnet' : transfer_process_image,
+            'vgg19'  : transfer_process_image,
+            'densenet' : transfer_process_image
+        }[for_model]
+
         validation_data = (
             validation_data
-            .map(process_image)
+            .map(image_processor)
         )
 
         dataset = (
             dataset
-            .map(process_image)
+            .map(image_processor)
         )
 
         if cache and not os.path.exists(cache):
@@ -70,7 +86,7 @@ def create_data(path : str, cache : str = None):
             print(f'Writing to cache directory "{cache}"...')
             dataset.save(os.path.join(cache, 'train.tfds'))
             validation_data.save(os.path.join(cache, 'validation.tfds'))
-            print('Finished.')
+            print('Finished writing to cache directory.')
 
         t_ds = dataset
         v_ds = validation_data
@@ -81,16 +97,19 @@ def create_data(path : str, cache : str = None):
         v_ds = tf.data.Dataset.load(os.path.join(cache, 'validation.tfds'))
         print(f'Loaded cached data.')
 
+    batch_sz = BATCH_SIZE if not batch_size else batch_size
     t_ds = (
         t_ds
-        .batch(BATCH_SIZE)
+        # .take(5_000)
+        .batch(batch_sz)
         .cache()
         .prefetch(PREFETCH_BUFFER_SIZE)
     )
 
     v_ds = (
         v_ds
-        .batch(BATCH_SIZE)
+        # .take(1_000)
+        .batch(batch_sz)
         .cache()
         .prefetch(PREFETCH_BUFFER_SIZE)
     )

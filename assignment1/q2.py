@@ -1,14 +1,13 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import matplotlib.pyplot as plt
-from data import create_data
+from data import get_or_create_data
 from ai import MyModel
 import numpy as np
 import tensorflow as tf
 import time
 import argparse
 
-from custom_metrics import recall_m, precision_m, f1_m
 from data import get_image_resize_dimensions
 
 PATH_TO_IMAGES = '/mnt/c/Users/emilk/Downloads/250000_Final/250000_Final'
@@ -26,17 +25,17 @@ for gpu in gpus:
     )
 
 def main(args):
-    data, val_data = create_data(PATH_TO_IMAGES, cache=CACHE_DIRECTORY)
+    data, val_data = get_or_create_data(PATH_TO_IMAGES, cache=CACHE_DIRECTORY, batch_size=256)
     
     if args.load_model is None:
         if not args.compile_model or not args.build_model:
             raise Exception(f'If you create a new model you must compile and build it with the --compile-model and --build-model flags')
-        model = MyModel(model_filters=8, 
+        model = MyModel(model_filters=12, 
                         residual_layers=4, 
                         residual_filters=32,
                         residual_kernel_size=(3, 3), 
                         dropout=0.2, 
-                        ff_dim=128, 
+                        ff_dim=64, 
                         NUM_CLASSES=10)
     else:
         model = tf.keras.models.load_model(args.load_model)
@@ -44,7 +43,7 @@ def main(args):
     if args.compile_model:
         lr_sched = tf.keras.optimizers.schedules.ExponentialDecay(
             initial_learning_rate=1e-4,
-            decay_steps=1000,
+            decay_steps=500,
             decay_rate=0.96
         )
         model.compile(
@@ -71,41 +70,68 @@ def main(args):
         model.summary()
 
     if args.fit:
-        model.fit(data, validation_data=val_data, epochs=args.epochs)
+        hist = model.fit(data, validation_data=val_data, epochs=args.epochs)
+        
+        if args.plot:
+            tra_acc = hist.history['accuracy']
+            val_acc = hist.history['val_accuracy']
+            x = list(range(len(tra_acc)))
+            
+            fig = plt.figure()
+            plt.plot(x, tra_acc)
+            plt.plot(x, val_acc)
+
+            plt.ylabel('Accuracy')
+            plt.xlabel('Step')
+            plt.title('Accuracy')
+            
+            plt.legend(('Train', 'Validation'))
+            plt.show(block=False)
+
         if not args.no_save:
             model.save(f'models/model_{MODEL_NAME}')
             print(f'Saved model to "models/model_{MODEL_NAME}"')
 
-    if args.plot:
-        fig = plt.figure(figsize=(12, 12))
-        fig.subplots_adjust(
-            left=0.1,
-            bottom=0.1,
-            right=0.9,
-            top=0.9,
-            wspace=0.5,
-            hspace=0.5
-        )
-        grid = fig.add_gridspec(4, 4)
-        grids = (grid[0, 0], grid[0, 1], grid[0, 2], grid[0, 3],
-                grid[1, 0], grid[1, 1], grid[1, 2], grid[1, 3],
-                grid[2, 0], grid[2, 1], grid[2, 2], grid[2, 3],
-                grid[3, 0], grid[3, 1], grid[3, 2], grid[3, 3],
-                )
+    if args.evaluate:
+        
+        print(f'Evaluating model metrics...')
+        evaluations = model.evaluate(val_data)
+        loss, accuracy, tp, tn, fp, fn = evaluations
+        
+        for metric, metric_name in zip(evaluations, ['Loss', 'Accuracy', 'True Positives', 'True Negatives', 'False Positives', 'False Negatives']):
+            print(f'{metric_name.rjust(18)} : {metric:10.3f}')
+        
+        if args.plot:
+            fig = plt.figure(figsize=(12, 12))
+            fig.subplots_adjust(
+                left=0.1,
+                bottom=0.1,
+                right=0.9,
+                top=0.9,
+                wspace=0.5,
+                hspace=0.5
+            )
+            
+            grid = fig.add_gridspec(4, 4)
+            grids = (grid[0, 0], grid[0, 1], grid[0, 2], grid[0, 3],
+                    grid[1, 0], grid[1, 1], grid[1, 2], grid[1, 3],
+                    grid[2, 0], grid[2, 1], grid[2, 2], grid[2, 3],
+                    grid[3, 0], grid[3, 1], grid[3, 2], grid[3, 3],
+                    )
 
-        for images, labels in val_data.take(1):
-            preds = model(images)
+            for images, labels in val_data.take(1):
+                preds = model(images)
 
-            for image, label, grid, img_preds in zip(images, labels, grids[:], preds):
-                ax = fig.add_subplot(grid)
-                ax.imshow(image, cmap='gray', vmin=0, vmax=1)
+                for image, label, grid, img_preds in zip(images, labels, grids[:], preds):
+                    ax = fig.add_subplot(grid)
+                    ax.imshow(image, cmap='gray', vmin=0, vmax=1)
 
-                predicted = tf.argmax(img_preds, axis=-1)
-                labl = tf.argmax(label).numpy()
-                titl = f'{labl} | {predicted.numpy()} : {img_preds[predicted.numpy()]:.2f}'
-                ax.set_title(titl)
+                    predicted = tf.argmax(img_preds, axis=-1)
+                    labl = tf.argmax(label).numpy()
+                    titl = f'{labl} | {predicted.numpy()} : {img_preds[predicted.numpy()]:.2f}'
+                    ax.set_title(titl)
 
-        plt.show()
+    plt.show()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -115,8 +141,8 @@ if __name__ == '__main__':
     parser.add_argument('--plot', '-p', action='store_true', help='Plot results in a figure')
     parser.add_argument('--fit', '-f', action='store_true', help='Toggle to fit the model to data')
     parser.add_argument('--epochs', '-e', type=int, help='How many epochs run when fitting the model')
-    parser.add_argument('--no-save', action='store_false', help='Toggle off to not save the model after fitting')
+    parser.add_argument('--evaluate', '-t', action='store_true', help='Toggle to evaluate the model')
+    parser.add_argument('--no-save', action='store_true', help='Toggle off to not save the model after fitting')
     parser.add_argument('--verbose', '-v', action='store_true', help='Turn on verbosity')
     args = parser.parse_args()
-
     main(args)

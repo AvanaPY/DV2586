@@ -40,21 +40,24 @@ class MyModel(Model):
         super().__init__(name='StureDigitNet')
 
         self._layers = []
+        
+        # Initial layers
         self._layers.append(Conv2D(filters=residual_filters, kernel_size=(5, 5), strides=(1, 1), padding='valid', activation='relu', name='ResidualPrepare'))
         self._layers.append(Dropout(dropout))
         
+        # Residual layers
         for _ in range(residual_layers):
             self._layers.append(ResidualConvolutional2D(filters=residual_filters, kernel_size=residual_kernel_size, dropout=dropout, activation='relu'))
 
-        self._layers.append(Conv2D(filters=model_filters, kernel_size=(3, 3), strides=(1, 1), padding='valid', activation='relu'))
-        self._layers.append(MaxPooling2D(pool_size=2))
+        # Dimensionality reduction layers
+        self._layers.append(Conv2D(filters=model_filters, kernel_size=(5, 5), strides=(1, 1), padding='valid', activation='relu'))
+        self._layers.append(Conv2D(filters=model_filters, kernel_size=(5, 5), strides=(1, 1), padding='valid', activation='relu'))
         
-        self._layers.append(Conv2D(filters=model_filters, kernel_size=(3, 3), strides=(1, 1), padding='valid', activation='relu'))
-        self._layers.append(MaxPooling2D(pool_size=2))
+        # Reduce channels to 1
+        self._layers.append(Conv2D(filters=2, kernel_size=(1, 1), strides=(1, 1), padding='valid', activation='relu'))
         
+        # Flatten and map down to number of classes
         self._layers.append(Flatten())
-        
-        self._layers.append(Dense(ff_dim, activation='relu'))
         self._layers.append(Dense(NUM_CLASSES, activation='softmax'))
         
 
