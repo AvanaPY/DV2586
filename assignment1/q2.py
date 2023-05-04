@@ -1,19 +1,18 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import matplotlib.pyplot as plt
-from data import get_or_create_data
-from ai import MyModel
-import numpy as np
 import tensorflow as tf
 import time
 import argparse
+import numpy as np
 
-from data import get_image_resize_dimensions
+from model import MyModel
+from data import get_or_create_data
+from data import get_image_dimensions
 
 PATH_TO_IMAGES = '/mnt/c/Users/emilk/Downloads/250000_Final/250000_Final'
 PATH_TO_IMAGES = '250000_Final'
 CACHE_DIRECTORY = 'cache2'
-MODEL_NAME = time.strftime("%Y%m%d_%H%M%S")
 
 # GPU Check
 gpus = tf.config.list_physical_devices('GPU')
@@ -25,26 +24,22 @@ for gpu in gpus:
     )
 
 def main(args):
-    data, val_data = get_or_create_data(PATH_TO_IMAGES, cache=CACHE_DIRECTORY, batch_size=256)
+    data, val_data = get_or_create_data(PATH_TO_IMAGES, cache=CACHE_DIRECTORY)
     
     if args.load_model is None:
         if not args.compile_model or not args.build_model:
             raise Exception(f'If you create a new model you must compile and build it with the --compile-model and --build-model flags')
-        model = MyModel(model_filters=12, 
-                        residual_layers=4, 
-                        residual_filters=32,
-                        residual_kernel_size=(3, 3), 
-                        dropout=0.2, 
-                        ff_dim=64, 
-                        NUM_CLASSES=10)
+        model = MyModel()
+        MODEL_NAME = time.strftime("%Y%m%d_%H%M%S")
     else:
-        model = tf.keras.models.load_model(args.load_model)
+        model = tf.keras.models.load_model(os.path.join('models', args.load_model))
+        MODEL_NAME = args.load_model
 
     if args.compile_model:
         lr_sched = tf.keras.optimizers.schedules.ExponentialDecay(
             initial_learning_rate=1e-4,
             decay_steps=500,
-            decay_rate=0.96
+            decay_rate=0.95
         )
         model.compile(
             tf.keras.optimizers.Adam(
@@ -63,7 +58,7 @@ def main(args):
     if args.build_model:
         if not args.load_model is None:
             raise Exception(f'Running Build() on a SavedModel is not supported.')
-        image_dims = get_image_resize_dimensions()
+        image_dims = get_image_dimensions()
         model.build((None, image_dims[0], image_dims[1], 1))
         
     if args.verbose:
@@ -95,10 +90,16 @@ def main(args):
     if args.evaluate:
         
         print(f'Evaluating model metrics...')
-        evaluations = model.evaluate(val_data)
+        evaluations = model.evaluate(data)
         loss, accuracy, tp, tn, fp, fn = evaluations
         
-        for metric, metric_name in zip(evaluations, ['Loss', 'Accuracy', 'True Positives', 'True Negatives', 'False Positives', 'False Negatives']):
+        precision = tp / (tp + fp)
+        recall    = tp / (tp + fn)
+        f         = 2 * precision * recall / (precision + recall)
+        
+        true_acc = (tp + tn) / (tp + fp + fn + tn)
+        
+        for metric, metric_name in zip(evaluations + [true_acc, precision, recall, f], ['Loss', 'Accuracy', 'True Positives', 'True Negatives', 'False Positives', 'False Negatives', 'True Accuracy', 'Precision', 'Recall', 'F1']):
             print(f'{metric_name.rjust(18)} : {metric:10.3f}')
         
         if args.plot:

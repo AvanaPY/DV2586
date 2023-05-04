@@ -1,11 +1,10 @@
 from typing import *
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-from tqdm import tqdm
 import tensorflow as tf
 from tensorflow.keras.applications.resnet50 import preprocess_input
 
-BATCH_SIZE = 128
+BATCH_SIZE = 256
 SHUFFLE_BUFFER_SIZE = 1024
 PREFETCH_BUFFER_SIZE = 2
 
@@ -16,7 +15,7 @@ def scale_values(image, label):
 
 @tf.function
 def resize_image(image, label):
-    image = tf.image.resize(image, get_image_resize_dimensions())
+    image = tf.image.resize(image, get_image_dimensions())
     return image, label
 
 @tf.function
@@ -31,19 +30,19 @@ def one_hot_y(image, label):
 @tf.function
 def process_image(image, label):
     image = image / 255.0
-    image = tf.image.resize(image, get_image_resize_dimensions())
+    image = tf.image.resize(image, get_image_dimensions())
     image = tf.image.rgb_to_grayscale(image)
     label = tf.one_hot(label, 10)
     return image, label
 
 @tf.function
 def transfer_process_image(image, label):
-    image = tf.image.resize(image, (48, 48))
+    image = tf.image.resize(image, get_image_dimensions())
     image = preprocess_input(image)
     label = tf.one_hot(label, 10)
     return image, label
     
-def get_image_resize_dimensions():
+def get_image_dimensions():
     return (48, 48)
 
 def get_or_create_data(path : str, cache : str = None, batch_size : Optional[int] = None, for_model : Optional[str] = None):
@@ -59,7 +58,7 @@ def get_or_create_data(path : str, cache : str = None, batch_size : Optional[int
             shuffle=True,
             seed=69420,
             batch_size=None, 
-            image_size=get_image_resize_dimensions(),
+            image_size=get_image_dimensions(),
             validation_split=0.2,
             subset='both'
             )
@@ -100,7 +99,7 @@ def get_or_create_data(path : str, cache : str = None, batch_size : Optional[int
     batch_sz = BATCH_SIZE if not batch_size else batch_size
     t_ds = (
         t_ds
-        # .take(5_000)
+        .take(50_000)
         .batch(batch_sz)
         .cache()
         .prefetch(PREFETCH_BUFFER_SIZE)
@@ -108,7 +107,6 @@ def get_or_create_data(path : str, cache : str = None, batch_size : Optional[int
 
     v_ds = (
         v_ds
-        # .take(1_000)
         .batch(batch_sz)
         .cache()
         .prefetch(PREFETCH_BUFFER_SIZE)

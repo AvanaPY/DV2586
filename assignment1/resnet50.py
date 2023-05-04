@@ -39,10 +39,10 @@ def main(args):
     data, val_data = get_or_create_data('250000_Final', f'cache_{BASE_MODEL_NAME}', 256, BASE_MODEL_NAME)
 
     if args.load_model:
-        net = tf.keras.models.load_model(f'models/{BASE_MODEL_NAME}_10')
+        model = tf.keras.models.load_model(f'models/{BASE_MODEL_NAME}_10')
     else:
-        net = VGG19_10()
-        net.compile(
+        model = VGG19_10()
+        model.compile(
             tf.keras.optimizers.Adam(
                 learning_rate=1e-4
             ), 
@@ -55,19 +55,25 @@ def main(args):
                 'FalseNegatives'
             ]
         )
-        net.build((None, 48, 48, 3))
-    net.summary()
+        model.build((None, 48, 48, 3))
+    model.summary()
 
     if args.fit:
-        net.fit(data, epochs=5)
-        net.save(f'models/{BASE_MODEL_NAME}_10')
+        model.fit(data, epochs=5)
+        model.save(f'models/{BASE_MODEL_NAME}_10')
 
     if args.evaluate:
         print(f'Evaluating model metrics...')
-        evaluations = net.evaluate(val_data)
+        evaluations = model.evaluate(val_data)
         loss, accuracy, tp, tn, fp, fn = evaluations
-
-        for metric, metric_name in zip(evaluations, ['Loss', 'Accuracy', 'True Positives', 'True Negatives', 'False Positives', 'False Negatives']):
+        
+        precision = tp / (tp + fp)
+        recall    = tp / (tp + fn)
+        f         = 2 * precision * recall / (precision + recall)
+        
+        true_acc = (tp + tn) / (tp + fp + fn + tn)
+        
+        for metric, metric_name in zip(evaluations + [true_acc, precision, recall, f], ['Loss', 'Accuracy', 'True Positives', 'True Negatives', 'False Positives', 'False Negatives', 'True Accuracy', 'Precision', 'Recall', 'F1']):
             print(f'{metric_name.rjust(18)} : {metric:10.3f}')
         
     
