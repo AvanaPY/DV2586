@@ -1,7 +1,6 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import tensorflow as tf
-from tensorflow.keras.applications.resnet50 import ResNet50 as BaseModel
 from keras.models import Model
 from keras.layers import Dense, Input, GlobalAveragePooling2D
 import numpy as np
@@ -9,8 +8,8 @@ import argparse
 
 from data import get_or_create_data
 
-class VGG19_10(Model):
-    def __init__(self):
+class CustomModel(Model):
+    def __init__(self, BaseModel):
         super().__init__()
         self._rnet = BaseModel(
             weights='imagenet',
@@ -32,16 +31,25 @@ class VGG19_10(Model):
         image_dims = (48, 48)
         x = Input(shape=(image_dims[0], image_dims[1], 3))
         Model(inputs=[x], outputs=self.call(x)).summary()
-
-BASE_MODEL_NAME = 'resnet'
+        
+BASE_MODEL_NAMES = ['resnet', 'vgg', 'densenet']
 
 def main(args):
+    BASE_MODEL_NAME = args.model
+    
+    if BASE_MODEL_NAME == 'resnet':
+        from tensorflow.keras.applications.resnet50 import ResNet50 as BaseModel
+    elif BASE_MODEL_NAME == 'vgg':
+        from tensorflow.keras.applications.vgg19 import VGG19 as BaseModel
+    else:
+        from tensorflow.keras.applications.densenet import DenseNet121 as BaseModel
+    
     data, val_data = get_or_create_data('250000_Final', f'cache_{BASE_MODEL_NAME}', 256, BASE_MODEL_NAME)
 
     if args.load_model:
         model = tf.keras.models.load_model(f'models/{BASE_MODEL_NAME}_10')
     else:
-        model = VGG19_10()
+        model = CustomModel(BaseModel=BaseModel)
         model.compile(
             tf.keras.optimizers.Adam(
                 learning_rate=1e-4
@@ -76,10 +84,10 @@ def main(args):
         for metric, metric_name in zip(evaluations + [true_acc, precision, recall, f], ['Loss', 'Accuracy', 'True Positives', 'True Negatives', 'False Positives', 'False Negatives', 'True Accuracy', 'Precision', 'Recall', 'F1']):
             print(f'{metric_name.rjust(18)} : {metric:10.3f}')
         
-    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--load-model', action='store_true', default=None, help='Toggle to load the saved model')
+    parser.add_argument('--model', type=str, choices=BASE_MODEL_NAMES, required=True, help='Which model to use')
+    parser.add_argument('--load-model', '-l', action='store_true', default=None, help='Toggle to load the saved model')
     parser.add_argument('--fit', '-f', action='store_true', help='Toggle to fit the model')
     parser.add_argument('--evaluate', '-e', action='store_true', help='Toggle to evaluate the model')
     args = parser.parse_args()
