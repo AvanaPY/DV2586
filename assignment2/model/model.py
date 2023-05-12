@@ -3,12 +3,15 @@ from typing import *
 import tensorflow as tf
 import keras
 from keras.models import Sequential, Model
-from keras.layers import LSTM, CuDNNLSTM, Dense, Input, TimeDistributed, RepeatVector, Dropout
+from keras.layers import LSTM, CuDNNLSTM, Dense, Input, TimeDistributed, RepeatVector, Dropout, LeakyReLU, BatchNormalization
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
 
-from data.data import Config as DataConfig
+from data.data import DataConfig as DataConfig
 
 class ModelConfig:
-    LEARNING_RATE = 1e-3
+    LEARNING_RATE = 1e-4
     optimizer = tf.keras.optimizers.Adam(LEARNING_RATE)
     loss      = tf.keras.losses.MeanAbsoluteError()
     metrics   = []
@@ -16,46 +19,21 @@ class ModelConfig:
     MODEL_INPUT_VALUES = 4
     MODEL_OUTPUT_VALUES = 4
     MODEL_SEQUENCE_LENGTH = DataConfig.SEQUENCE_LENGTH
-        
-class ModelWrapper:
-    def __init__(self, model : Model):
-        self._model = model
-        self._reconstruction_error = 0
-        
-    @property
-    def model(self) -> Model:
-        return self._model
     
-    def calculate_reconstruction_error(self, train_ds : tf.data.Dataset) -> None:
-        h = self._model.evaluate(train_ds)
-        
-        mse = h
-        self._reconstruction_error = mse
-        
-        return self._reconstruction_error
-    
-    def plot_anomalies(dataset : tf.data.Dataset) -> None:
-        pass
-    
-    def __call__(self, *args, **kwargs) -> Any:
-        return self._model(*args, **kwargs)
-    
-    def fit(self, *args, **kwargs) -> Any:
-        return self._model.fit(*args, **kwargs)        
-    
-    def summary(self) -> None:
-        return self._model.summary()
-
-def build_encoder_decoder_lstm() -> ModelWrapper:
+def build_encoder_decoder_lstm() -> Model:
     model = Sequential()
     # Encoder
-    model.add(LSTM(128, activation='tanh', name='EncoderStart'))
-    model.add(Dropout(0.2))
-    model.add(RepeatVector(ModelConfig.MODEL_SEQUENCE_LENGTH))
+    model.add(LSTM(32, activation='tanh', return_sequences=True, name='encoderstart'))
+    model.add(BatchNormalization())
+    model.add(LSTM(64, activation='tanh'))
+    model.add(BatchNormalization())
+    
     # Decoder
-    model.add(LSTM(128, activation='tanh', return_sequences=True, name='DecoderStart'))
-    model.add(Dropout(0.2))
-    model.add(TimeDistributed(Dense(ModelConfig.MODEL_OUTPUT_VALUES)))
+    model.add(RepeatVector(ModelConfig.MODEL_SEQUENCE_LENGTH))
+    model.add(LSTM(64, activation='tanh', return_sequences=True, name='decoderstart'))
+    model.add(BatchNormalization())
+    model.add(LSTM(128, activation='tanh', return_sequences=True))
+    model.add(TimeDistributed(Dense(ModelConfig.MODEL_OUTPUT_VALUES, activation='sigmoid')))
     
     model.compile(
         optimizer=ModelConfig.optimizer,
@@ -63,6 +41,5 @@ def build_encoder_decoder_lstm() -> ModelWrapper:
         metrics=ModelConfig.metrics
     )
     model.build((None, ModelConfig.MODEL_SEQUENCE_LENGTH, ModelConfig.MODEL_INPUT_VALUES))
-    
-    
-    return ModelWrapper(model)
+
+    return model
