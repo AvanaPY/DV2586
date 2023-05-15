@@ -1,5 +1,6 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['__IMAGE_DESTINATION'] = 'img'
 import tensorflow as tf
 import json
 from data import get_data
