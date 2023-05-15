@@ -1,3 +1,4 @@
+import os
 from typing import *
 import numpy as np
 import matplotlib.pyplot as plt
@@ -5,7 +6,8 @@ import matplotlib.dates as mdates
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from keras.models import Model
-from data.data import DataConfig
+
+IMAGE_DESTINATION = os.environ['__IMAGE_DESTINATION']
 
 class Analyzer:
     def __init__(self, model : Model):
@@ -31,7 +33,8 @@ class Analyzer:
     def plot_anomalies(self, sequences : np.ndarray, 
                              dates : List[Any], 
                              data_cols : List[str], 
-                             scalers : Optional[List[MinMaxScaler]]=None) -> None:
+                             scalers : Optional[List[MinMaxScaler]]=None,
+                             save_images : bool = False) -> None:
         org_data = sequences[:,0,:]                                # This line reconstructs the original data
         org_data = np.concatenate([org_data, sequences[-1,1:,:]])
         
@@ -67,8 +70,7 @@ class Analyzer:
                 df[[col + ' Reconstruct']] = scalers[0].inverse_transform(df[[col + ' Reconstruct']])
                 df[[col + ' Threshold']] = scalers[0].inverse_transform(df[[col + ' Threshold']])
 
-        plt.figure(figsize=(12, 12))
-        plt.suptitle(f'Reconstructed data with anomalies')
+        fig = plt.figure(figsize=(20, 12))
         for i, column in enumerate(data_cols):
             ax = plt.subplot(2, 2, i+1)
             plt.xticks(rotation=30)
@@ -84,7 +86,7 @@ class Analyzer:
                 c='red',
                 s=4,
                 label='Anomaly',
-                zorder=0)
+                zorder=10)
             plt.legend()
             
             ax.xaxis_date()
@@ -92,12 +94,13 @@ class Analyzer:
             ax.set_xticklabels(dates[::100])
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d/%Y'))
             ax.xaxis.set_major_locator(mdates.DayLocator())
+        if save_images:
+            fig.savefig(os.path.join(IMAGE_DESTINATION, 'reconstructed_anomalies.png'))
         
-        plt.figure(figsize=(12, 12))
-        plt.suptitle(f'Reconstructed data with error thresholds')
+        fig = plt.figure(figsize=(20, 12))
         for i, column in enumerate(data_cols):
             ax = plt.subplot(2, 2, i+1)
-            plt.title(column)
+            plt.title(f'{column}')
             plt.xticks(rotation=30)
             
             plt.plot(dates, df[column + ' Reconstruct'], label='Reconstructed')
@@ -110,5 +113,7 @@ class Analyzer:
             ax.set_xticklabels(dates[::100])
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d/%Y'))
             ax.xaxis.set_major_locator(mdates.DayLocator())
+        if save_images:
+            fig.savefig(os.path.join(IMAGE_DESTINATION, 'reconstructed_thresholds.png'))
 
         plt.show()

@@ -1,14 +1,11 @@
 from typing import *
 import pandas as pd
-import tensorflow as tf
 import numpy as np
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-import math
+from sklearn.preprocessing import MinMaxScaler
 
 class DataConfig:
-    DATASET_PATH = './data/dataset2.csv'
-    SEQUENCE_LENGTH = 32
-    BATCH_SIZE = 4
+    SEQUENCE_LENGTH = 16
+    BATCH_SIZE = 16
     SHUFFLE_BUFFER_SIZE = 128
     CUTOFF_DATE = '2004-02-16 00:00:00'
         
@@ -18,7 +15,7 @@ def standardize_column(df : pd.DataFrame, column : str) -> None:
     return scaler
     
 def get_dataset2_df() -> Tuple[pd.DataFrame, List[str]]:
-    df = pd.read_csv(DataConfig.DATASET_PATH)
+    df = pd.read_csv('./data/dataset2.csv')
     df.rename(columns={'Unnamed: 0': 'timestamp'}, inplace=True)
     data_cols = ['Bearing 1', 'Bearing 2', 'Bearing 3', 'Bearing 4']
     scalers = [standardize_column(df, col) for col in data_cols]
@@ -38,9 +35,6 @@ def create_sequence(df : pd.DataFrame, data_columns : List[str], sequence_length
 
 def get_data(return_scalers : bool = False) -> Any:
     df, val_data, data_columns, scalers = get_dataset2_df()
-
-    df_length = len(df.index)
-    sl = DataConfig.SEQUENCE_LENGTH
     
     # Get data from dataframe, shape (3, SEQUENCE_LENGTH)
     data = create_sequence(df, data_columns, DataConfig.SEQUENCE_LENGTH)
